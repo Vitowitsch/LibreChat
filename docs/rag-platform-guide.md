@@ -36,6 +36,12 @@ flowchart TB
 
 **Supported file formats:** PDF (text and scanned), Word (DOCX), Excel (XLSX, XLS, ODS), OpenDocument (ODT), Markdown, plain text, HTML, CSV, JSON, and common image formats. Image-only / scanned content requires OCR (`ocr` block in `librechat.yaml`, Mistral OCR).
 
+**OCR config scope:** the `ocr:` block (provider, API key, base URL, strategy) is **global** — set once by the platform operator, customers cannot override. "OCR enabled for this agent" is a per-agent capability (`AgentCapabilities.ocr` in `endpoints.agents.capabilities`, on by default). Recommendation: enable globally and leave the capability on; agent owners can opt out per-agent if they don't need it.
+
+**Vision / VLM paths today:**
+- *Chat attachments* — images sent as a chat message are forwarded as native `image_url` / `inlineData` / `image` parts to vision-capable LLMs (OpenAI, Anthropic, Google) — `api/server/services/Files/images/encode.js`. The model sees the image directly, no OCR.
+- *RAG ingestion* — only text is embedded. Diagrams, charts, and complex layouts inside ingested PDFs are reduced to whatever Mistral OCR's Markdown captures. **No VLM-per-page or visual-embedding path** (e.g. ColPali) exists in the file-search pipeline.
+
 ## 2. Performance bottlenecks
 
 | # | Bottleneck | Effect |
@@ -56,6 +62,7 @@ flowchart TB
 - Default-route table-heavy PDFs through OCR-with-layout, not text extraction.
 - Surface parse errors (timeout, OCR-skipped, encrypted PDF) back to the uploader instead of silent fallback.
 - Lift the 15 MB native cap or stream large files end-to-end through the RAG API.
+- **Add a VLM-per-page path** for visually rich documents (diagrams, charts, complex layouts). Two viable options: (a) render each page to an image, send to a vision LLM at ingest time to produce Markdown + image captions alongside OCR text; (b) ColPali / ColQwen2 multivector visual embeddings indexed alongside dense text vectors, with the original page image fed to a VLM at answer time. Closes the biggest gap that Mistral OCR alone cannot cover.
 
 ### Chunking
 - Expose chunk size / overlap / splitter type in `librechat.yaml` (currently fixed inside the RAG service).
